@@ -10,7 +10,9 @@ use invaders::{
 };
 use rusty_audio::Audio;
 use std::{error::Error, io, sync::mpsc, thread, time::Duration};
+use std::time::Instant;
 use invaders::frame::Drawable;
+use invaders::invaders::Invaders;
 use invaders::player::Player;
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -49,8 +51,13 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Game Loop
     let mut player = Player::new();
+    let mut instant = Instant::now();
+    let mut invaders = Invaders::new();
+
     'gameloop: loop {
         // Per-frame init
+        let delta = instant.elapsed();
+        instant = Instant::now();
         let mut curr_frame = new_frame();
 
         while event::poll(Duration::default())? {
@@ -58,6 +65,11 @@ fn main() -> Result<(), Box<dyn Error>> {
                 match key_event.code {
                     KeyCode::Left => player.move_left(),
                     KeyCode::Right => player.move_right(),
+                    KeyCode::Char(' ') | KeyCode::Enter => {
+                        if player.shoot() {
+                            audio.play("pew");
+                        }
+                    }
                     KeyCode::Esc | KeyCode::Char('q') => {
                         audio.play("lose");
                         break 'gameloop;
@@ -67,8 +79,20 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         }
 
+        // Updates
+        player.update(delta);
+        if invaders.update(delta) {
+            audio.play("move");
+        }
+
         // Draw & render
-        player.draw(&mut curr_frame);
+        // player.draw(&mut curr_frame);
+        // invaders.draw(&mut curr_frame);
+
+        let drawables: Vec<&dyn Drawable> = vec![&player, &invaders];
+        for drawable in drawables {
+            drawable.draw(&mut curr_frame);
+        }
         let _ = render_tx.send(curr_frame);
         thread::sleep(Duration::from_millis(1));
     }
